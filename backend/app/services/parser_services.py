@@ -1,5 +1,6 @@
 import fitz
 from docx import Document
+from openpyxl import load_workbook
 
 
 def extract_text_from_pdf(file_path: str) -> str:
@@ -38,5 +39,21 @@ def extract_text_from_docx(file_path: str) -> str:
 
             if row_data:
                 text += " : ".join(row_data) + "\n"
+
+    return text
+
+
+def extract_text_from_excel(file_path: str) -> str:
+    workbook = load_workbook(file_path, data_only=True)
+
+    text = ""
+
+    for sheet in workbook.worksheets:
+        for row in sheet.iter_rows(values_only=True):
+            row_text = " | ".join(
+                str(cell) for cell in row if cell is not None
+            )
+            if row_text:
+                text += row_text + "\n"
 
     return text
