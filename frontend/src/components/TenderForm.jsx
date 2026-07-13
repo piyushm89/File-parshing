@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import api from "../services/api";
 
 const defaultValues = {
+  tender_id: "",
   tender_reference_no: "",
   authority_name: "",
   authority_type: "",
@@ -35,7 +36,9 @@ const defaultValues = {
   evaluation_method: "",
   disqualification_clauses: "",
 };
+
 const fields = [
+  ["tender_id", "Tender ID"],
   ["tender_reference_no", "Tender Reference No"],
   ["authority_name", "Authority Name"],
   ["authority_type", "Authority Type"],
@@ -68,13 +71,16 @@ const fields = [
   ["evaluation_method", "Evaluation Method"],
   ["disqualification_clauses", "Disqualification Clauses", "textarea"],
 ];
+
 export default function TenderForm({ extractedData }) {
   const { register, reset, handleSubmit } = useForm({ defaultValues });
   const [saving, setSaving] = React.useState(false);
   const [msg, setMsg] = React.useState("");
+
   React.useEffect(() => {
     if (extractedData) reset({ ...defaultValues, ...extractedData });
   }, [extractedData, reset]);
+
   const onSubmit = async (data) => {
     setSaving(true);
     setMsg("");
@@ -87,6 +93,7 @@ export default function TenderForm({ extractedData }) {
       setSaving(false);
     }
   };
+
   return (
     <div>
       <div className="border-b pb-4 mb-6">
