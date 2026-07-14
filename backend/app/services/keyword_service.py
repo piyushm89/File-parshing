@@ -1,6 +1,5 @@
 import re
 
-
 KEYWORDS = {
     "mandatory_documents": [
         "mandatory document",
@@ -38,58 +37,42 @@ KEYWORDS = {
         "eligibility",
         "eligible",
         "qualification",
+        "pre qualification",
         "pre-qualification",
-        "prequalification",
         "minimum criteria",
-        "bidder must",
-        "should have",
         "experience",
-        "turnover",
         "annual turnover",
+        "turnover",
+        "bidder must",
     ],
 
     "disqualification_clauses": [
         "disqualification",
+        "blacklisted",
         "rejected",
         "liable to rejection",
-        "bid shall be rejected",
-        "ineligible",
-        "blacklisted",
-        "termination",
         "debarred",
-        "shall be summarily rejected",
     ],
 
     "submission_mode": [
-        "submission mode",
         "online submission",
         "offline submission",
-        "electronic format",
-        "physical submission",
-        "rpad",
-        "speed post",
-        "registered post",
-        "hand delivery",
         "mode of submission",
+        "submission mode",
+        "physical submission",
     ],
 
     "technical_bid": [
         "technical bid",
         "technical proposal",
-        "technical specifications",
-        "scope of supply",
-        "specification",
-        "technical requirement",
+        "technical specification",
     ],
 
     "commercial_bid": [
         "commercial bid",
-        "commercial proposal",
         "price bid",
-        "pricing",
-        "price schedule",
-        "commercial terms",
-        "payment terms",
+        "financial bid",
+        "commercial proposal",
     ],
 
     "scope_of_work": [
@@ -97,29 +80,20 @@ KEYWORDS = {
         "work description",
         "description of work",
         "project description",
-        "scope of supply",
-        "nature of work",
     ],
 
     "price_bid": [
         "price bid",
-        "price schedule",
         "boq",
         "bill of quantities",
-        "rate contract",
-        "unit rate",
-        "quoted price",
+        "price schedule",
     ],
 
     "tender_description": [
-        "description of material",
         "name of work",
-        "scope of work",
-        "work description",
+        "tender title",
+        "description of work",
         "project description",
-        "brief description",
-        "description of tender",
-        "tender details",
     ],
 }
 
@@ -149,49 +123,43 @@ def split_into_paragraphs(text: str):
 
 
 def extract_relevant_sections(text: str):
+
     paragraphs = split_into_paragraphs(text)
 
     collected = {}
 
     print("")
-    print(" Keyword Extraction")
+    print("Keyword Extraction")
     print("-" * 40)
 
     for field, keywords in KEYWORDS.items():
+
         snippets = []
 
         for i, para in enumerate(paragraphs):
+
             lower_para = para.lower()
 
             if any(keyword in lower_para for keyword in keywords):
+
                 start = max(0, i - WINDOW)
                 end = min(len(paragraphs), i + WINDOW + 1)
 
-                snippet = "\n\n".join(paragraphs[start:end])
-                snippets.append(snippet)
+                snippets.append("\n\n".join(paragraphs[start:end]))
 
-        unique = []
-        seen = set()
-
-        for s in snippets:
-            if s not in seen:
-                seen.add(s)
-                unique.append(s)
+        unique = list(dict.fromkeys(snippets))
 
         collected[field] = "\n\n".join(unique[:3])
-        print(f" {field} : {len(unique)} section(s)")
+
+        print(f"{field} : {len(unique)} section(s)")
 
     print("-" * 40)
 
-    final_text = []
+    relevant_context = "\n\n".join(
+        value for value in collected.values() if value.strip()
+    )
 
-    for value in collected.values():
-        if value.strip():
-            final_text.append(value)
-
-    relevant_context = "\n\n".join(final_text)
-
-    print(f" Relevant Context Size : {len(relevant_context):,} characters")
+    print(f"Relevant Context Size : {len(relevant_context):,} characters")
     print("-" * 40)
 
     return collected, relevant_context

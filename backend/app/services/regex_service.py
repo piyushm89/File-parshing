@@ -159,9 +159,46 @@ FIELD_PATTERNS = {
 
 
 def clean_value(value: str) -> str:
-    value = value.strip()
+    value = value.replace("\n", " ")
     value = re.sub(r"\s+", " ", value)
-    return value
+    value = value.strip()
+
+    STOP_WORDS = [
+        "View BOQ",
+        "Organization Name",
+        "Organisation Name",
+        "Authority Name",
+        "Location",
+        "Department",
+        "Sub Department",
+        "Tender Type",
+        "Tender title",
+        "Tender Title",
+        "Name Of Project",
+        "Project Name",
+        "Tender Category",
+        "Procurement Type",
+        "Sector",
+        "Contract Type",
+        "State",
+        "District",
+        "Currency",
+        "EMD",
+        "Tender Fee",
+        "Payment Mode",
+        "Bid validity",
+        "Delivery Period",
+        "Bid Submission",
+        "Document Download",
+        "Evaluation Date",
+    ]
+
+    for word in STOP_WORDS:
+        index = value.lower().find(word.lower())
+        if index > 0:
+            value = value[:index].strip()
+
+    return value.rstrip(":- ").strip()
 
 
 def extract_simple_fields(text: str) -> dict:
@@ -185,10 +222,12 @@ def extract_simple_fields(text: str) -> dict:
 
             if match:
                 value = clean_value(match.group(1))
-                result[field] = value
-                found += 1
-                print(f" {field} : {value}")
-                break
+
+                if value:
+                    result[field] = value
+                    found += 1
+                    print(f" {field} : {value}")
+                    break
 
     print("-" * 40)
     print(f"Regex Fields Found : {found}/{len(FIELD_PATTERNS)}")
