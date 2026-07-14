@@ -1,5 +1,7 @@
 import os
 import json
+import re
+
 from dotenv import load_dotenv
 from mistralai.client import Mistral
 
@@ -30,15 +32,16 @@ def build_prompt(context: str, regex_data: dict) -> str:
         "Extract Indian Government Tender fields from the context below.\n\n"
         f"Regex already extracted: {json.dumps(regex_preview)}\n\n"
         f"Extract ONLY: {json.dumps(remaining)}\n\n"
-        "Return ONLY valid JSON.\n"
-        "Do not write explanations.\n"
-        "Do not wrap JSON inside markdown.\n"
-        "Use empty string for missing fields.\n\n"
+        "IMPORTANT:\n"
+        "- Return ONLY valid JSON.\n"
+        "- Do NOT wrap the JSON in markdown.\n"
+        "- Do NOT explain anything.\n"
+        "- Use empty string for missing fields.\n\n"
         f"Context:\n{context}"
     )
 
 
-def extract_fields(context: str, regex_data: dict | None =None) -> dict:
+def extract_fields(context: str, regex_data: dict | None = None) -> dict:
 
     if regex_data is None:
         regex_data = {}
@@ -51,16 +54,23 @@ def extract_fields(context: str, regex_data: dict | None =None) -> dict:
     print("USING MODEL :", model)
     print("=" * 80)
 
-    response = client.chat.complete(
-        model=model,
-        messages=[
-            {
-                "role": "user",
-                "content": prompt,
-            }
-        ],
-        temperature=0,
-    )
+    try:
+        response = client.chat.complete(
+            model=model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                }
+            ],
+            temperature=0,
+        )
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Mistral API Error: {str(e)}",
+        }
 
     content = response.choices[0].message.content
 
@@ -70,10 +80,8 @@ def extract_fields(context: str, regex_data: dict | None =None) -> dict:
     print(repr(content))
     print("=" * 80)
 
+    # Handle SDK responses that are not strings
     if not isinstance(content, str):
-        print("WARNING : Content is not a string")
-        print(type(content))
-
         try:
             content = str(content)
         except Exception:
@@ -82,6 +90,27 @@ def extract_fields(context: str, regex_data: dict | None =None) -> dict:
                 "message": "Unexpected response type from Mistral.",
                 "raw_response": repr(content),
             }
+
+    # Remove Markdown code fences
+    content = content.strip()
+
+    content = re.sub(r"^```json\s*", "", content, flags=re.IGNORECASE)
+    content = re.sub(r"^```", "", content)
+    content = re.sub(r"```$", "", content)
+
+    content = content.strip()
+
+    # Extract JSON object if extra text exists
+    match = re.search(r"\{.*\}", content, re.DOTALL)
+
+    if match:
+        content = match.group(0)
+
+    print("\n" + "=" * 80)
+    print("CLEANED MISTRAL RESPONSE")
+    print("=" * 80)
+    print(content)
+    print("=" * 80)
 
     try:
         data = json.loads(content)
