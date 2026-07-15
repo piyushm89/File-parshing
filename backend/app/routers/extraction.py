@@ -118,6 +118,11 @@ async def extract(
     if len(relevant_context) > len(cleaned_text):
         relevant_context = cleaned_text
 
+    print("\nREGEX DATA")
+    print("-" * 40)
+    print(regex_data)
+    print("-" * 40)
+
     # ---------------------------------------------------
     # Step 4: LLM Extraction (only complex fields)
     # Extract_fields merges regex_data into final result internally
@@ -133,6 +138,10 @@ async def extract(
             "message": merged_data.get("message", "Failed to extract data from document.")
         }
 
+    print("\nFINAL DATA")
+    print("-" * 40)
+    print(merged_data)
+    print("-" * 40)
     # ---------------------------------------------------
     # Timing Summary
     # ---------------------------------------------------

@@ -1,236 +1,559 @@
 import re
+from typing import Dict
+
+# ==========================================================
+# TEXT NORMALIZATION
+# ==========================================================
+
+def normalize_text(text: str) -> str:
+    """
+    Normalize extracted text while preserving line structure.
+    """
+
+    text = text.replace("\r\n", "\n")
+    text = text.replace("\r", "\n")
+
+    # Remove extra spaces
+    text = re.sub(r"[ \t]+", " ", text)
+
+    # Remove duplicate blank lines
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
 
 
-FIELD_PATTERNS = {
-    "tender_id": [
-        r"Tender[ \t]*ID[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Tender[ \t]*No[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Tender[ \t]*Number[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Bid[ \t]*No[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+# ==========================================================
+# CLEAN VALUE
+# ==========================================================
 
-    "tender_reference_no": [
-        r"IFB/Tender Notice No[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Tender Reference No[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Tender Ref(?:erence)? No[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"NIT No[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Bid Reference[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Notice No[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Reference No[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+def clean_value(value: str) -> str:
 
-    "authority_name": [
-        r"Organization Name[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Authority Name[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Organisation Name[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Inviting Authority[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"(?:Name of )(?:the )?Authority[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    if not value:
+        return ""
 
-    "authority_type": [
-        r"Authority Type[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Organization Type[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    value = value.replace("\n", " ")
 
-    "department": [
-        r"^Department[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Office Name[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    value = re.sub(r"\s+", " ", value)
 
-    "tender_title": [
-        r"Tender title/Name Of Project[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Tender Title[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Name of Work[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Project Name[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    value = value.strip()
 
-    "tender_type": [
-        r"Tender Type[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Type of Tender[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    value = value.rstrip(":")
+    value = value.rstrip("-")
 
-    "tender_category": [
-        r"Tender Category[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"^Category[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    return value.strip()
 
-    "procurement_type": [
-        r"Procurement Type[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Type of Procurement[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
 
-    "sector": [
-        r"Sector Category[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"^Sector[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"ST=([^,\n]+)",
-    ],
+# ==========================================================
+# EXTRACT BETWEEN TWO LABELS
+# ==========================================================
 
-    "contract_type": [
-        r"Form of Contract[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Contract Type[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Type of Contract[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+def extract_between(
+    text: str,
+    start_label: str,
+    end_label: str | None = None,
+) -> str:
 
-    "state_ut": [
-        r"ST=([^,\n]+)",
-        r"State/UT[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"^State[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    start = text.lower().find(start_label.lower())
 
-    "district": [
-        r"Location[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"District[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    if start == -1:
+        return ""
 
-    "currency": [
-        r"Tender Currency Setting[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"^Currency[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    start += len(start_label)
 
-    "emd_amount": [
-        r"Bid Security/EMD.*?([\d,]+(?:\s*INR)?)",
-        r"EMD Amount[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Earnest Money Deposit[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"EMD[ \t]*[:\-]?[ \t]*(?:INR[ \t]*)?([\d,]+)",
-    ],
+    if end_label:
 
-    "emd_type": [
-        r"EMD Fee Exempted[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"EMD Type[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Bid Security[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+        end = text.lower().find(end_label.lower(), start)
 
-    "tender_fee": [
-        r"Bidding Processing Fee.*?([\d,]+(?:\s*INR)?)",
-        r"Tender Fee[ \t]*[:\-]?[ \t]*(?!(?:Payment|payment))([^\n]+)",
-        r"Cost of Tender[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Tender Cost[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+        if end == -1:
+            value = text[start:]
+        else:
+            value = text[start:end]
 
-    "tender_fee_payment_mode": [
-        r"Tender Fee Payment Mode[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Payment Mode[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Fee Payment Mode[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    else:
+        value = text[start:]
 
-    "bid_validity": [
-        r"Bid validity[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Bid Validity[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Validity Period[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    return clean_value(value)
 
-    "delivery_period": [
-        r"Period of Completion/Delivery Period[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Delivery Period[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Period of Completion[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
 
-    "submission_deadline": [
-        r"Bid Submission Closing Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Submission Deadline[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Closing Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Last Date for Submission[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+# ==========================================================
+# EXTRACT USING REGEX
+# ==========================================================
 
-    "submission_start_date": [
-        r"Bid Submission Start Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Submission Start Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Start Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+def extract_regex(pattern: str, text: str) -> str:
 
-    "document_download_start": [
-        r"Bid Document Download Start Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Document Download Start[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Download Start Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    match = re.search(
+        pattern,
+        text,
+        flags=re.IGNORECASE | re.MULTILINE | re.DOTALL,
+    )
 
-    "document_download_end": [
-        r"Bid document download End Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Document Download End[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Download End Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    if not match:
+        return ""
 
-    "bid_open_date": [
-        r"Evaluation Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Bid Opening Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-        r"Bid Open Date[ \t]*[:\-]?[ \t]*([^\n]+)",
-    ],
+    return clean_value(match.group(1))
+
+
+# ==========================================================
+# DATE CLEANER
+# ==========================================================
+
+def clean_date(value: str) -> str:
+
+    match = re.search(
+        r"\d{2}[-/]\d{2}[-/]\d{4}(?:\s+\d{2}:\d{2})?",
+        value,
+    )
+
+    if match:
+        return match.group()
+
+    return clean_value(value)
+
+
+# ==========================================================
+# MONEY CLEANER
+# ==========================================================
+
+def clean_money(value: str) -> str:
+
+    match = re.search(
+        r"[\d,]+(?:\.\d+)?\s*INR",
+        value,
+        flags=re.IGNORECASE,
+    )
+
+    if match:
+        return match.group()
+
+    match = re.search(
+        r"[\d,]+(?:\.\d+)?",
+        value,
+    )
+
+    if match:
+        return match.group()
+
+    return clean_value(value)
+
+
+# ==========================================================
+# YES / NO CLEANER
+# ==========================================================
+
+def clean_yes_no(value: str) -> str:
+
+    value = clean_value(value)
+
+    if value.lower().startswith("yes"):
+        return "Yes"
+
+    if value.lower().startswith("no"):
+        return "No"
+
+    return value
+
+# ==========================================================
+# FIELD BOUNDARIES
+# ==========================================================
+
+FIELD_BOUNDARIES = {
+
+    "tender_id": (
+        "Tender ID",
+        "View BOQ"
+    ),
+
+    "authority_name": (
+        "Organization Name",
+        "Location"
+    ),
+
+    "district": (
+        "Location",
+        "Department"
+    ),
+
+    "department": (
+        "Department",
+        "Sub Department"
+    ),
+
+    "tender_reference_no": (
+        "IFB/Tender Notice No",
+        "Tender Type"
+    ),
+
+    "tender_type": (
+        "Tender Type",
+        "Tender title/Name Of Project"
+    ),
+
+    "tender_title": (
+        "Tender title/Name Of Project",
+        "Description of Material/Name of Work"
+    ),
+
+    "tender_description": (
+        "Description of Material/Name of Work",
+        "Sector Category"
+    ),
+
+    "sector": (
+        "Sector Category",
+        "Form of Contract"
+    ),
+
+    "contract_type": (
+        "Form of Contract",
+        "Product Category"
+    ),
+
+    "tender_category": (
+        "Tender Category",
+        "Tender Currency Type"
+    ),
+
+    "currency": (
+        "Tender Currency Setting",
+        "Period of Completion/Delivery Period"
+    ),
+
+    "delivery_period": (
+        "Period of Completion/Delivery Period",
+        "Procurement Type"
+    ),
+
+    "procurement_type": (
+        "Procurement Type",
+        "Consortium / Joint Venture"
+    ),
+
+    "document_download_start": (
+        "Bid Document Download Start Date",
+        "Bid document download End Date"
+    ),
+
+    "document_download_end": (
+        "Bid document download End Date",
+        "Bid Submission Start Date"
+    ),
+
+    "submission_start_date": (
+        "Bid Submission Start Date",
+        "Bid Submission Closing Date"
+    ),
+
+    "submission_deadline": (
+        "Bid Submission Closing Date",
+        "Tender NIT View Date"
+    ),
+
+    "bid_validity": (
+        "Bid validity",
+        "Amount Details"
+    ),
+
+    "tender_fee": (
+        "Bidding Processing Fee ( OFFLINE)",
+        "Bidding Processing Fee Payable to"
+    ),
+
+    "emd_amount": (
+        "Bid Security/EMD/Proposal Security INR ( OFFLINE)",
+        "Bid Security/EMD/Proposal Security INR Payable to"
+    ),
+
+    "emd_type": (
+        "EMD Fee Exempted",
+        "Bank Guarantee Minimum"
+    ),
+
+    "authority_type": (
+        "Authority Type",
+        "Department"
+    ),
+
+    "state_ut": (
+        "State",
+        "District"
+    ),
+
+    "bid_open_date": (
+        "Evaluation Date",
+        "Minimum Forms for Submission"
+    ),
 }
 
 
-def clean_value(value: str) -> str:
-    value = value.replace("\n", " ")
-    value = re.sub(r"\s+", " ", value)
-    value = value.strip()
+# ==========================================================
+# SPECIAL FIELD HANDLERS
+# ==========================================================
 
-    STOP_WORDS = [
-        "View BOQ",
-        "Organization Name",
-        "Organisation Name",
-        "Authority Name",
-        "Location",
-        "Department",
-        "Sub Department",
-        "Tender Type",
-        "Tender title",
-        "Tender Title",
-        "Name Of Project",
-        "Project Name",
-        "Tender Category",
-        "Procurement Type",
-        "Sector",
-        "Contract Type",
-        "State",
-        "District",
-        "Currency",
-        "EMD",
-        "Tender Fee",
-        "Payment Mode",
-        "Bid validity",
-        "Delivery Period",
-        "Bid Submission",
-        "Document Download",
-        "Evaluation Date",
-    ]
+DATE_FIELDS = {
+    "document_download_start",
+    "document_download_end",
+    "submission_start_date",
+    "submission_deadline",
+    "bid_open_date",
+}
 
-    for word in STOP_WORDS:
-        index = value.lower().find(word.lower())
-        if index > 0:
-            value = value[:index].strip()
+MONEY_FIELDS = {
+    "emd_amount",
+    "tender_fee",
+}
 
-    return value.rstrip(":- ").strip()
+YES_NO_FIELDS = {
+    "emd_type",
+}
 
+# ==========================================================
+# MAIN EXTRACTION FUNCTION
+# ==========================================================
 
-def extract_simple_fields(text: str) -> dict:
+def extract_simple_fields(text: str) -> Dict:
+
+    text = normalize_text(text)
+
     result = {}
 
     print("")
-    print(" Regex Extraction")
-    print("-" * 40)
+    print("Regex Extraction")
+    print("-" * 50)
 
     found = 0
 
-    for field, patterns in FIELD_PATTERNS.items():
-        result[field] = ""
+    for field, (start_label, end_label) in FIELD_BOUNDARIES.items():
 
-        for pattern in patterns:
-            match = re.search(
-                pattern,
-                text,
-                flags=re.IGNORECASE | re.MULTILINE,
-            )
+        value = extract_between(
+            text=text,
+            start_label=start_label,
+            end_label=end_label,
+        )
 
-            if match:
-                value = clean_value(match.group(1))
+        if field in DATE_FIELDS:
+            value = clean_date(value)
 
-                if value:
-                    result[field] = value
-                    found += 1
-                    print(f" {field} : {value}")
-                    break
+        elif field in MONEY_FIELDS:
+            value = clean_money(value)
 
-    print("-" * 40)
-    print(f"Regex Fields Found : {found}/{len(FIELD_PATTERNS)}")
-    print("-" * 40)
+        elif field in YES_NO_FIELDS:
+            value = clean_yes_no(value)
+
+        result[field] = value
+
+        if value:
+            found += 1
+            print(f"✅ {field:30} : {value}")
+
+    # ------------------------------------------------------
+    # FALLBACK REGEX EXTRACTION
+    # ------------------------------------------------------
+
+    if not result["state_ut"]:
+
+        state = extract_regex(
+            r"ST=([^,\n]+)",
+            text,
+        )
+
+        result["state_ut"] = state
+
+    if not result["sector"]:
+
+        sector = extract_regex(
+            r"Sector Category\s*(.*?)\s*Form of Contract",
+            text,
+        )
+
+        result["sector"] = sector
+
+    if not result["contract_type"]:
+
+        contract = extract_regex(
+            r"Form of Contract\s*(.*?)\s*Product Category",
+            text,
+        )
+
+        result["contract_type"] = contract
+
+    if not result["currency"]:
+
+        currency = extract_regex(
+            r"Tender Currency Setting\s*(.*?)\s*Period of Completion",
+            text,
+        )
+
+        result["currency"] = currency
+
+    if not result["procurement_type"]:
+
+        procurement = extract_regex(
+            r"Procurement Type\s*(.*?)\s*Consortium",
+            text,
+        )
+
+        result["procurement_type"] = procurement
+
+    if not result["department"]:
+
+        department = extract_regex(
+            r"Department\s*(.*?)\s*Sub Department",
+            text,
+        )
+
+        result["department"] = department
+
+    if not result["district"]:
+
+        district = extract_regex(
+            r"Location\s*(.*?)\s*Department",
+            text,
+        )
+
+        result["district"] = district
+
+    if not result["authority_name"]:
+
+        authority = extract_regex(
+            r"Organization Name\s*(.*?)\s*Location",
+            text,
+        )
+
+        result["authority_name"] = authority
+
+    if not result["tender_reference_no"]:
+
+        ref = extract_regex(
+            r"IFB/Tender Notice No\s*(.*?)\s*Tender Type",
+            text,
+        )
+
+        result["tender_reference_no"] = ref
+
+    print("-" * 50)
+    print(f"Regex Fields Found : {found}/{len(FIELD_BOUNDARIES)}")
+    print("-" * 50)
+
+    return result
+
+# ==========================================================
+# EXTRACTION HELPERS FOR COMPLEX FIELDS
+# ==========================================================
+
+def extract_mandatory_documents(text: str) -> str:
+
+    pattern = (
+        r"Documents required for Stage.*?"
+        r"Mandatory(.*?)(?:Commercial Stage|Certificate Details|$)"
+    )
+
+    match = re.search(
+        pattern,
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+
+    if not match:
+        return ""
+
+    section = match.group(1)
+
+    docs = []
+
+    for line in section.splitlines():
+
+        line = clean_value(line)
+
+        if not line:
+            continue
+
+        if "yes" in line.lower():
+
+            line = re.sub(r"^\d+\s*", "", line)
+
+            line = re.sub(r"\s+Yes$", "", line, flags=re.I)
+
+            docs.append(line)
+
+    return ", ".join(dict.fromkeys(docs))
+
+
+def extract_submission_mode(text: str) -> str:
+
+    modes = []
+
+    lower = text.lower()
+
+    if "electronic format" in lower:
+        modes.append("Electronic")
+
+    if "physical submission" in lower:
+        modes.append("Physical")
+
+    if "speed post" in lower:
+        modes.append("Speed Post")
+
+    if "rpad" in lower:
+        modes.append("RPAD")
+
+    if "in person" in lower:
+        modes.append("In Person")
+
+    return ", ".join(modes)
+
+
+def extract_evaluation_method(text: str) -> str:
+
+    lower = text.lower()
+
+    if "technical bid" in lower and "price bid" in lower:
+        return "Technical Bid + Price Bid"
+
+    if "qcbs" in lower:
+        return "QCBS"
+
+    if "l1" in lower:
+        return "L1"
+
+    return ""
+
+
+def extract_disqualification(text: str) -> str:
+
+    keywords = [
+        "blacklisted",
+        "debarred",
+        "liable to rejection",
+        "rejected",
+        "terminated",
+    ]
+
+    found = []
+
+    lower = text.lower()
+
+    for word in keywords:
+
+        if word in lower:
+            found.append(word)
+
+    return ", ".join(found)
+
+
+# ==========================================================
+# ENRICH REGEX RESULT
+# ==========================================================
+
+def enrich_fields(result: Dict, text: str) -> Dict:
+
+    result["mandatory_documents"] = extract_mandatory_documents(text)
+
+    result["submission_mode"] = extract_submission_mode(text)
+
+    result["document_submission_mode"] = result["submission_mode"]
+
+    result["evaluation_method"] = extract_evaluation_method(text)
+
+    result["disqualification_clauses"] = extract_disqualification(text)
 
     return result
